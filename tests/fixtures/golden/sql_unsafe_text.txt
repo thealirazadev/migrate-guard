@@ -1,11 +1,11 @@
-tests/fixtures/sql/unsafe/0042_add_email_index.sql
+tests/fixtures/sql/postgres/unsafe/0042_add_email_index.sql
   4  MG002  error    CREATE INDEX without CONCURRENTLY blocks all writes to
                      users for the duration of the build.
                      statement: CREATE INDEX users_email_idx ON users (email)
                      fix: CREATE INDEX CONCURRENTLY users_email_idx ON users
                           (email); run it outside a transaction.
 
-tests/fixtures/sql/unsafe/0043_cleanup.sql
+tests/fixtures/sql/postgres/unsafe/0043_cleanup.sql
   1  MG004  error    DROP TABLE removes audit_legacy and its data permanently.
                      statement: DROP TABLE audit_legacy
                      fix: Stop reading and writing audit_legacy, ship that
@@ -18,7 +18,7 @@ tests/fixtures/sql/unsafe/0043_cleanup.sql
                           it in a later migration once no running code selects
                           it.
 
-tests/fixtures/sql/unsafe/0044_garbage.sql
+tests/fixtures/sql/postgres/unsafe/0044_garbage.sql
   1  MG002  error    CREATE INDEX without CONCURRENTLY blocks all writes to
                      orders for the duration of the build.
                      statement: CREATE INDEX orders_code_idx ON orders (code)
@@ -36,6 +36,84 @@ tests/fixtures/sql/unsafe/0044_garbage.sql
                           version, then drop it in a later migration once the
                           previous release is retired.
 
-checked 3 files, 7 statements
-6 findings: 5 errors (5 gating), 1 warning, 0 allowed
+tests/fixtures/sql/postgres/unsafe/0045_widen_email.sql
+  2  MG001  error    Changing the type of users.email rewrites the whole table
+                     under an ACCESS EXCLUSIVE lock, which blocks reads as well
+                     as writes.
+                     statement: ALTER TABLE users ALTER COLUMN email TYPE varchar(255)
+                     fix: Add a new column of the target type, backfill it in
+                          batches, switch the application over, then drop the
+                          old one; users.email stays readable throughout.
+
+tests/fixtures/sql/postgres/unsafe/0046_add_status.sql
+  2  MG003  error    ADD COLUMN status NOT NULL without a DEFAULT fails on users
+                     as soon as it holds a single row.
+                     statement: ALTER TABLE users ADD COLUMN status text NOT NULL
+                     fix: Add status nullable, backfill it in batches, then
+                          enforce it with CHECK (status IS NOT NULL) NOT VALID,
+                          VALIDATE CONSTRAINT, and SET NOT NULL; or give this
+                          statement a constant DEFAULT.
+
+tests/fixtures/sql/postgres/unsafe/0047_enforce_email.sql
+  2  MG001  error    SET NOT NULL on users.email takes ACCESS EXCLUSIVE and
+                     scans every row before it returns.
+                     statement: ALTER TABLE users ALTER COLUMN email SET NOT NULL
+                     fix: Add CHECK (email IS NOT NULL) NOT VALID, VALIDATE
+                          CONSTRAINT it in a later migration, then SET NOT NULL:
+                          PostgreSQL 16 skips the scan when a validated check
+                          already proves it.
+
+tests/fixtures/sql/postgres/unsafe/0048_rename_email.sql
+  2  MG005  error    Renaming users.email to primary_email removes the old name
+                     while the previous release is still selecting it.
+                     statement: ALTER TABLE users RENAME COLUMN email TO primary_email
+                     fix: Add primary_email as a new column, write both names,
+                          backfill in batches, switch reads, then drop email in
+                          a later migration under an MG004 allow.
+  4  MG005  error    Renaming orders to purchases removes the old name while the
+                     previous release is still querying it.
+                     statement: ALTER TABLE orders RENAME TO purchases
+                     fix: Create purchases alongside orders, dual-write,
+                          backfill, switch reads, then drop orders in a later
+                          migration under an MG004 allow.
+
+tests/fixtures/sql/postgres/unsafe/0049_orders_user_fk.sql
+  2  MG006  error    Adding a foreign key to orders without NOT VALID scans
+                     every existing row and blocks writes to both tables while
+                     it runs.
+                     statement: ALTER TABLE orders ADD CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users (id)
+                     fix: Add the constraint with NOT VALID now, then run ALTER
+                          TABLE orders VALIDATE CONSTRAINT <name>; in a later
+                          migration, which takes only SHARE UPDATE EXCLUSIVE.
+
+tests/fixtures/sql/postgres/unsafe/0050_unique_email.sql
+  2  MG007  error    Adding a UNIQUE constraint to users builds its index under
+                     ACCESS EXCLUSIVE, which blocks reads and writes for the
+                     whole build.
+                     statement: ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email)
+                     fix: Run CREATE UNIQUE INDEX CONCURRENTLY <name> ON users
+                          (...); outside a transaction first, then ALTER TABLE
+                          users ADD CONSTRAINT <name> UNIQUE USING INDEX <name>;
+
+tests/fixtures/sql/postgres/unsafe/0051_drop_status_type.sql
+  2  MG008  warning  DROP TYPE order_status is the drop-and-recreate pattern
+                     used to remove enum values, which loses every row still
+                     holding a removed member.
+                     statement: DROP TYPE order_status
+                     fix: To add a member use ALTER TYPE ... ADD VALUE. To
+                          remove one, create a new type, swap the column over in
+                          batches, and drop the old type in a later migration
+                          once nothing references it.
+
+tests/fixtures/sql/postgres/unsafe/0052_add_created_at.sql
+  2  MG001  error    ADD COLUMN users.created_at with a volatile DEFAULT is
+                     evaluated per row, so it rewrites the whole table even on
+                     PostgreSQL 11 and later.
+                     statement: ALTER TABLE users ADD COLUMN created_at timestamptz NOT NULL DEFAULT now()
+                     fix: Add the column with no default, backfill it in
+                          batches, then run ALTER TABLE users ALTER COLUMN
+                          created_at SET DEFAULT ...; for new rows.
+
+checked 11 files, 16 statements
+15 findings: 13 errors (13 gating), 2 warnings, 0 allowed
 verdict: FAIL (fail_on = error)

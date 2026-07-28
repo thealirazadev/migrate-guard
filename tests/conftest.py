@@ -11,8 +11,10 @@ from migrate_guard.ir import Operation, OpKind, SourceSpan
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
-SQL_UNSAFE = "tests/fixtures/sql/unsafe"
-SQL_SAFE = "tests/fixtures/sql/safe"
+SQL_UNSAFE = "tests/fixtures/sql/postgres/unsafe"
+SQL_SAFE = "tests/fixtures/sql/postgres/safe"
+MYSQL_UNSAFE = "tests/fixtures/sql/mysql/unsafe"
+MYSQL_SAFE = "tests/fixtures/sql/mysql/safe"
 
 
 @pytest.fixture

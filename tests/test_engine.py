@@ -103,3 +103,60 @@ def test_findings_sort_by_file_then_line_then_code() -> None:
         ("a.sql", 9, "MG004"),
         ("b.sql", 1, "MG004"),
     ]
+
+
+NEW_TABLE_OPS = [
+    make_op(OpKind.create_table, table="sessions", line=1),
+    make_op(
+        OpKind.alter_column_type,
+        table="sessions",
+        column="token",
+        line=2,
+        new_type="text",
+        old_type=None,
+    ),
+    make_op(
+        OpKind.add_column,
+        table="sessions",
+        column="a",
+        line=3,
+        not_null=True,
+        has_default=False,
+        default_volatile=False,
+    ),
+    make_op(
+        OpKind.add_column,
+        table="sessions",
+        column="b",
+        line=4,
+        not_null=True,
+        has_default=True,
+        default_volatile=True,
+    ),
+    make_op(OpKind.set_not_null, table="sessions", column="token", line=5),
+    make_op(OpKind.create_index, table="sessions", line=6, unique=False, concurrent=False),
+    make_op(OpKind.drop_column, table="sessions", column="scratch", line=7),
+    make_op(OpKind.rename_column, table="sessions", column="a", line=8, new_name="c"),
+    make_op(OpKind.rename_table, table="sessions", line=9, new_name="tokens"),
+    make_op(OpKind.add_foreign_key, table="sessions", line=10, not_valid=False),
+    make_op(OpKind.add_unique_constraint, table="sessions", line=11, using_index=False),
+    make_op(OpKind.redefine_enum, table="sessions", column="kind", line=12),
+    make_op(OpKind.dml, table="sessions", line=13, verb="insert"),
+]
+
+
+def test_the_new_table_exemption_covers_every_rule() -> None:
+    result = result_for(*NEW_TABLE_OPS)
+
+    assert check_file(result, Config(dialect="postgres", postgres_version=10)) == []
+    assert check_file(result, Config(dialect="mysql")) == []
+
+
+def test_the_same_operations_on_an_existing_table_are_reported() -> None:
+    without_create = result_for(*NEW_TABLE_OPS[1:])
+    codes = {
+        finding.code
+        for finding in check_file(without_create, Config(dialect="postgres", postgres_version=10))
+    }
+
+    assert codes == {"MG001", "MG002", "MG003", "MG004", "MG005", "MG006", "MG007"}
