@@ -70,6 +70,30 @@ def test_data_before_schema_still_counts_as_mixed() -> None:
     assert check(file_ops, 0) is not None
 
 
+def test_seed_rows_for_a_new_table_do_not_claim_the_one_report() -> None:
+    """The engine exempts the seed INSERT, so it must not consume the file's report."""
+    file_ops = [
+        make_op(OpKind.create_table, table="sessions", line=1),
+        make_op(OpKind.dml, table="sessions", line=2, verb="insert"),
+        make_op(OpKind.add_column, table="users", column="nickname", line=4),
+        make_op(OpKind.dml, table="users", line=6, raw="UPDATE users", verb="update"),
+    ]
+
+    assert check(file_ops, 1) is None
+    finding = check(file_ops, 3)
+    assert finding is not None
+    assert finding.span.line == 6
+
+
+def test_a_file_that_only_seeds_a_new_table_stays_silent() -> None:
+    file_ops = [
+        make_op(OpKind.create_table, table="sessions", line=1),
+        make_op(OpKind.dml, table="sessions", line=2, verb="insert"),
+    ]
+
+    assert check(file_ops, 1) is None
+
+
 def test_recognized_but_unmodelled_ddl_counts_as_schema() -> None:
     file_ops = [
         make_op(OpKind.other_ddl, table="users", line=1, statement_type="TRUNCATE"),

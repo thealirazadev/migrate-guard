@@ -71,6 +71,23 @@ def test_a_pathological_statement_does_not_abort_the_run(
     assert "internal error" not in result.stderr
 
 
+def test_a_seeded_new_table_does_not_hide_a_backfill_on_a_live_one(
+    run_cli: Callable[..., Result], tmp_path: Path
+) -> None:
+    """MG009 still reports the mixed file when the first data statement is exempt."""
+    migration = tmp_path / "0100_seed_and_backfill.sql"
+    migration.write_text(
+        "CREATE TABLE sessions (id bigint);\n\n"
+        "INSERT INTO sessions (id) VALUES (1);\n\n"
+        "ALTER TABLE users ADD COLUMN nickname varchar(40);\n\n"
+        "UPDATE users SET nickname = 'unset' WHERE nickname IS NULL;\n",
+        encoding="utf-8",
+    )
+    result = run_cli("check", str(migration), "--dialect", "mysql")
+
+    assert codes(result.stdout) == ["MG009"]
+
+
 def test_dialect_gate_changes_the_verdict(run_cli: Callable[..., Result]) -> None:
     postgres = run_cli("check", f"{SQL_UNSAFE}/0042_add_email_index.sql", "--dialect", "postgres")
     mysql = run_cli("check", f"{SQL_UNSAFE}/0042_add_email_index.sql", "--dialect", "mysql")

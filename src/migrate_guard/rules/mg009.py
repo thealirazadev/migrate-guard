@@ -7,7 +7,10 @@ schema partly changed and the data partly written, and rerunning the file often
 fails on the part that already succeeded.
 
 The rule is file-level: it reports once, at the first data statement, rather
-than once per statement, because the problem is the file's shape.
+than once per statement, because the problem is the file's shape. Seed rows for
+a table this same file creates do not count as that statement: the table has no
+traffic yet, and letting it claim the one report would silence the backfill that
+follows it on a live table.
 """
 
 from __future__ import annotations
@@ -57,9 +60,10 @@ occurrence with a reason:
         index: int,
         config: Config,
     ) -> Finding | None:
-        if op.kind is not OpKind.dml:
+        created = _tables_created_here(file_ops)
+        if not _counts_as_data(op, created):
             return None
-        if any(earlier.kind is OpKind.dml for earlier in file_ops[:index]):
+        if any(_counts_as_data(earlier, created) for earlier in file_ops[:index]):
             return None
         if not any(other.kind is not OpKind.dml for other in file_ops):
             return None
@@ -81,6 +85,21 @@ occurrence with a reason:
             ),
             statement=op.raw,
         )
+
+
+def _counts_as_data(op: Operation, created: frozenset[str]) -> bool:
+    """A data statement on a table that already exists outside this migration."""
+    if op.kind is not OpKind.dml:
+        return False
+    return op.table is None or op.table.casefold() not in created
+
+
+def _tables_created_here(file_ops: Sequence[Operation]) -> frozenset[str]:
+    return frozenset(
+        op.table.casefold()
+        for op in file_ops
+        if op.kind is OpKind.create_table and op.table is not None
+    )
 
 
 RULE = MG009()
