@@ -24,13 +24,22 @@ work; log every non-obvious decision with its reason. Keep entries short and dat
   a safe-form fixture that stays silent. Eleven commits: the ten listed in `docs/phases.md` plus
   one corrective `fix(rules)`.
 
+- 2026-07-29 - Phase 2 functional review: three defects found and fixed, one commit each
+  (`fix(extract): report unmapped alter table as mg000`,
+  `fix(extract): contain every parser failure in the file that caused it`,
+  `fix(rules): stop seed data silencing mg009 for the rest of the file`). Each carries a test that
+  fails on the parent commit and passes on the fix. Nothing else in the Phase 2 diff needed a
+  change; the rule matrix, the dialect gates, the version gates, and the new-table exemption all
+  held up under probing.
+
 ## Project status
 
 - Phases 1 and 2 shipped and verified locally; Phase 3 (Laravel and Django extractors) not
   started, awaiting owner approval.
 - Verified on 2026-07-29 with Python 3.12.3 and uv 0.11.28: `uv sync`,
   `uv run python -c "import migrate_guard"`, `uv run ruff check .`, `uv run black --check .`, and
-  `uv run pytest` all clean (254 passed). Observed against the fixture corpus: the eleven Postgres
+  `uv run pytest` all clean (254 passed, 265 after the three review fixes below). Observed
+  against the fixture corpus: the eleven Postgres
   unsafe fixtures report exactly MG000-MG008 at the expected lines and exit 1; the eight Postgres
   safe fixtures and the five MySQL safe fixtures print "no problems found" and exit 0; the six
   MySQL unsafe fixtures report MG001, MG003, MG004, MG005, MG008, and MG009 and exit 1;
@@ -170,3 +179,25 @@ work; log every non-obvious decision with its reason. Keep entries short and dat
   maps seventeen operation kinds across two dialects and is the single place where SQL syntax
   knowledge is allowed to live; splitting it by statement type would add modules without reducing
   the total or making any rule simpler. Flagged rather than split.
+- 2026-07-29 - An `ALTER TABLE` that sqlglot keeps as a generic `Command` now produces MG000
+  instead of nothing. The Phase 1 decision above (a `Command` produces no operation and therefore
+  no finding) turned out to swallow every multi-action ALTER, the standard MySQL idiom and legal
+  Postgres: `ALTER TABLE users ADD COLUMN a int, DROP COLUMN legacy_flag;` reported "no problems
+  found" and exit 0, hiding MG004, the one code `ignore` is forbidden to silence. Only ALTER TABLE
+  tails are reported; `ALTER TYPE`, `ALTER SEQUENCE`, `SET`, and `VACUUM` stay silent, so the
+  noise argument from Phase 1 still holds where it applied. The cost is MG000 on a handful of
+  table-level forms nobody models (`ENGINE=InnoDB`, `REPLICA IDENTITY FULL`,
+  `ENABLE ROW LEVEL SECURITY`), which is the honest reading: migrate-guard did not check them.
+- 2026-07-29 - Extraction catches `SqlglotError` and `RecursionError` per statement, not just
+  `ParseError` and `TokenError`. A deeply nested expression raises `RecursionError` out of
+  `sqlglot.parse_one`, which escaped the extractor, hit the CLI boundary, and aborted the entire
+  run with exit 2 and an "internal error" line, taking every other file with it. The architecture
+  requires extraction never to raise to the top, and a scanned file is hostile input. The
+  statement mapping sits inside the same try for the same reason; genuine coding bugs
+  (`AttributeError`, `KeyError`) are deliberately not caught, so they still surface loudly.
+- 2026-07-29 - MG009 no longer counts a data statement whose table is created in the same file.
+  The earlier entry called the interaction deliberate, but it went further than intended: the rule
+  reports once, at the first `dml` operation, and when that statement was an exempt seed the
+  engine skipped it while the rule still counted it, so a later backfill on a live table went
+  unreported and the mixed file passed. A file whose only data statement is that seed is still
+  silent, which is the case the original entry meant to protect.
