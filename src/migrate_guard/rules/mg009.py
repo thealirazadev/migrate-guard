@@ -70,9 +70,9 @@ occurrence with a reason:
             span=op.span,
             table=op.table,
             message=(
-                f"This migration mixes schema changes with a {verb}; MySQL commits "
-                "implicitly around DDL, so the file is not atomic and a mid-file failure "
-                "leaves partial state."
+                f"This migration mixes schema changes with data changes ({verb}); MySQL "
+                "commits implicitly around DDL, so the file is not atomic and a mid-file "
+                "failure leaves partial state."
             ),
             safe_alternative=(
                 "Split the file: one migration for the schema change, a second for the "
