@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from . import mg002
 from .base import Rule
 
-REGISTRY: tuple[Rule, ...] = ()
+REGISTRY: tuple[Rule, ...] = (mg002.RULE,)
 
 
 def rules_for(dialect: str) -> tuple[Rule, ...]:
