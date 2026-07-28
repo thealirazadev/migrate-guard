@@ -1,0 +1,25 @@
+# migrate-guard configuration. Copy to .migrateguard.toml at the repository root.
+# Unknown keys are rejected with exit 2, so a misspelled key fails loudly.
+
+[migrate-guard]
+# Required here or via --dialect. Accepted values: postgres, mysql.
+dialect = "postgres"
+
+# Optional, default 16. Major version driving MG001 and MG003 semantics.
+postgres_version = 16
+
+# Required here or as PATHS on the command line. CLI paths override this entirely.
+paths = ["db/migrations"]
+
+# Optional. Rule codes never reported. MG000 and MG004 are rejected here:
+# parse failures must stay visible and drops need a per-site justification.
+ignore = []
+
+# Optional, default "error". Gating threshold: error or warning.
+fail_on = "error"
+
+# Optional. Per-file waivers; reason is mandatory and non-empty.
+# [[migrate-guard.allow]]
+# file = "db/migrations/0043_cleanup.sql"
+# rules = ["MG004"]
+# reason = "audit_legacy retired 2026-06, approved OPS-1123"
