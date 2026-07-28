@@ -249,7 +249,42 @@ def test_a_plain_unique_constraint_is_not_using_an_index() -> None:
 
 
 def test_other_alter_commands_are_still_ignored() -> None:
-    assert sql.extract("db/x.sql", "ALTER TYPE s ADD VALUE 'x';\n", "postgres").operations == ()
+    result = sql.extract("db/x.sql", "ALTER TYPE s ADD VALUE 'x';\n", "postgres")
+
+    assert result.operations == ()
+    assert result.diagnostics == ()
+
+
+@pytest.mark.parametrize(
+    ("statement", "dialect"),
+    [
+        ("ALTER TABLE users ADD COLUMN a int, DROP COLUMN legacy_flag", "postgres"),
+        ("ALTER TABLE users ADD COLUMN a int, ALTER COLUMN b SET NOT NULL", "postgres"),
+        ("ALTER TABLE users MODIFY a varchar(10), MODIFY b varchar(20)", "mysql"),
+        ("ALTER TABLE users ADD COLUMN a int NOT NULL, DROP COLUMN b", "mysql"),
+    ],
+)
+def test_an_unmapped_alter_table_is_reported_not_dropped(statement: str, dialect: str) -> None:
+    """A multi-action ALTER falls back to a raw command; silence would read as clean."""
+    result = sql.extract("db/x.sql", f"-- lead\n{statement};\n", dialect)
+
+    assert result.operations == ()
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.code == "MG000"
+    assert diagnostic.span.line == 2
+    assert "ALTER TABLE" in diagnostic.message
+    assert diagnostic.statement == statement
+
+
+def test_a_recovered_alter_command_produces_no_diagnostic() -> None:
+    text = (
+        "ALTER TABLE users VALIDATE CONSTRAINT users_email_nn;\n"
+        "ALTER TABLE users ADD CONSTRAINT k UNIQUE USING INDEX users_email_key;\n"
+    )
+    result = sql.extract("db/x.sql", text, "postgres")
+
+    assert len(result.operations) == 2
+    assert result.diagnostics == ()
 
 
 def test_foreign_keys_record_their_validation_mode() -> None:

@@ -42,6 +42,20 @@ def test_mg000_does_not_gate_but_is_reported(run_cli: Callable[..., Result]) -> 
     assert "0 allowed" in result.stdout
 
 
+def test_a_multi_action_alter_is_reported_instead_of_vanishing(
+    run_cli: Callable[..., Result], tmp_path: Path
+) -> None:
+    """The drop hides inside a statement sqlglot keeps as a raw command."""
+    migration = tmp_path / "0100_multi_action.sql"
+    migration.write_text(
+        "ALTER TABLE users ADD COLUMN a int, DROP COLUMN legacy_flag;\n", encoding="utf-8"
+    )
+    result = run_cli("check", str(migration), "--dialect", "postgres")
+
+    assert codes(result.stdout) == ["MG000"]
+    assert "no problems found" not in result.stdout
+
+
 def test_dialect_gate_changes_the_verdict(run_cli: Callable[..., Result]) -> None:
     postgres = run_cli("check", f"{SQL_UNSAFE}/0042_add_email_index.sql", "--dialect", "postgres")
     mysql = run_cli("check", f"{SQL_UNSAFE}/0042_add_email_index.sql", "--dialect", "mysql")

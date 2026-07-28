@@ -9,7 +9,9 @@ sqlglot models most ALTER forms as an `Alter` node with typed actions, but a few
 Postgres forms fall back to a generic `Command` holding the raw tail. The two
 that matter to the rules (VALIDATE CONSTRAINT and ADD CONSTRAINT ... UNIQUE
 USING INDEX) are recovered from that tail with anchored, bounded regexes;
-everything else a `Command` covers stays unmapped rather than guessed at.
+everything else a `Command` covers stays unmapped rather than guessed at. An
+ALTER TABLE that lands there is still reported as MG000, because a multi-action
+ALTER hides drops and rewrites and silence would read as a clean bill of health.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ UNIQUE_USING_INDEX = re.compile(
     rf"\s+UNIQUE\s+USING\s+INDEX\s+{IDENTIFIER}\s*$",
     re.IGNORECASE,
 )
+ALTER_TABLE_TAIL = re.compile(r"^TABLE\s", re.IGNORECASE)
 
 # A default is metadata-only on Postgres 11+ only when it is a constant
 # expression. Anything built from a function or a subquery is treated as
@@ -91,7 +94,17 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
                 )
             )
             continue
-        operations.extend(_operations(expression, span, raw))
+        mapped = _operations(expression, span, raw)
+        if not mapped and _is_unmapped_alter_table(expression):
+            diagnostics.append(
+                mg000.diagnostic(
+                    span,
+                    raw,
+                    "This ALTER TABLE uses a form migrate-guard cannot map to a known "
+                    "operation, so nothing in it was checked.",
+                )
+            )
+        operations.extend(mapped)
 
     return ExtractionResult(
         operations=tuple(operations),
@@ -177,11 +190,29 @@ def _dml(expression: exp.Expression, span: SourceSpan, raw: str) -> list[Operati
     ]
 
 
+def _is_unmapped_alter_table(expression: exp.Expression) -> bool:
+    """True for an ALTER TABLE that sqlglot could only keep as a raw command tail.
+
+    A multi-action ALTER lands here, and it can carry a DROP COLUMN, a type
+    change, or a SET NOT NULL. Dropping it silently would report the file as
+    clean, so the caller raises MG000 instead.
+    """
+    if not isinstance(expression, exp.Command):
+        return False
+    if str(expression.this or "").upper() != "ALTER":
+        return False
+    return ALTER_TABLE_TAIL.match(_command_tail(expression)) is not None
+
+
+def _command_tail(expression: exp.Command) -> str:
+    return " ".join(str(expression.args.get("expression") or "").split())
+
+
 def _command(expression: exp.Command, span: SourceSpan, raw: str) -> list[Operation]:
     """Recover the two ALTER forms sqlglot does not model from the command tail."""
     if str(expression.this or "").upper() != "ALTER":
         return []
-    tail = " ".join(str(expression.args.get("expression") or "").split())
+    tail = _command_tail(expression)
 
     match = VALIDATE_CONSTRAINT.match(tail)
     if match:
