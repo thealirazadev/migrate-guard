@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from . import mg002
+from . import mg002, mg004
 from .base import Rule
 
-REGISTRY: tuple[Rule, ...] = (mg002.RULE,)
+REGISTRY: tuple[Rule, ...] = (mg002.RULE, mg004.RULE)
 
 
 def rules_for(dialect: str) -> tuple[Rule, ...]:
