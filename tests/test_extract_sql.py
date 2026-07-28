@@ -94,7 +94,7 @@ def test_statement_excerpt_is_one_line_and_capped() -> None:
 
 
 def test_unmodelled_statements_produce_nothing() -> None:
-    text = "SET lock_timeout = '5s';\nINSERT INTO users (id) VALUES (1);\n"
+    text = "SET lock_timeout = '5s';\nSET LOCAL statement_timeout = 0;\n"
     result = sql.extract("db/x.sql", text, "postgres")
 
     assert result.operations == ()
