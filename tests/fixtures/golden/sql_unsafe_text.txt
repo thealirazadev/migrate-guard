@@ -1,0 +1,41 @@
+tests/fixtures/sql/unsafe/0042_add_email_index.sql
+  4  MG002  error    CREATE INDEX without CONCURRENTLY blocks all writes to
+                     users for the duration of the build.
+                     statement: CREATE INDEX users_email_idx ON users (email)
+                     fix: CREATE INDEX CONCURRENTLY users_email_idx ON users
+                          (email); run it outside a transaction.
+
+tests/fixtures/sql/unsafe/0043_cleanup.sql
+  1  MG004  error    DROP TABLE removes audit_legacy and its data permanently.
+                     statement: DROP TABLE audit_legacy
+                     fix: Stop reading and writing audit_legacy, ship that
+                          version, then drop it in a later migration once the
+                          previous release is retired.
+  3  MG004  error    DROP COLUMN removes legacy_flag from users permanently, and
+                     the previous release may still read it.
+                     statement: ALTER TABLE users DROP COLUMN legacy_flag
+                     fix: Stop writing legacy_flag, ship that version, then drop
+                          it in a later migration once no running code selects
+                          it.
+
+tests/fixtures/sql/unsafe/0044_garbage.sql
+  1  MG002  error    CREATE INDEX without CONCURRENTLY blocks all writes to
+                     orders for the duration of the build.
+                     statement: CREATE INDEX orders_code_idx ON orders (code)
+                     fix: CREATE INDEX CONCURRENTLY orders_code_idx ON orders
+                          (code); run it outside a transaction.
+  3  MG000  warning  Statement could not be parsed as postgres SQL, so
+                     migrate-guard could not check it.
+                     statement: THIS IS NOT SQL AT ALL
+                     fix: Check the statement against the configured dialect.
+                          migrate-guard reports what it cannot parse instead of
+                          assuming it is safe, so review this one by hand.
+  5  MG004  error    DROP TABLE removes orders_archive and its data permanently.
+                     statement: DROP TABLE orders_archive
+                     fix: Stop reading and writing orders_archive, ship that
+                          version, then drop it in a later migration once the
+                          previous release is retired.
+
+checked 3 files, 7 statements
+6 findings: 5 errors (5 gating), 1 warning, 0 allowed
+verdict: FAIL (fail_on = error)
