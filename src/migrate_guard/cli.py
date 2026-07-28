@@ -20,6 +20,7 @@ from .discovery import discover, read_source
 from .engine import check_file, sort_findings
 from .extractors import sql
 from .reporters import text as text_reporter
+from .rules import catalog, find
 
 EXTRACTORS = {"sql": sql.extract}
 
@@ -44,16 +45,23 @@ def cli() -> None:
     default=None,
     help="SQL dialect; overrides the config file.",
 )
+@click.option(
+    "--postgres-version",
+    type=int,
+    default=None,
+    help="Major PostgreSQL version driving MG001 and MG003  [default: 16]",
+)
 @click.option("--no-color", is_flag=True, help="Force plain output (same as NO_COLOR).")
 def check(
     paths: tuple[str, ...],
     config_path: str | None,
     dialect: str | None,
+    postgres_version: int | None,
     no_color: bool,
 ) -> None:
     """Lint migration files in PATHS (or the configured paths) and report findings."""
     try:
-        config = load_config(config_path, dialect)
+        config = load_config(config_path, dialect, postgres_version)
         files = discover(list(paths) or list(config.paths))
 
         findings = []
@@ -83,6 +91,27 @@ def check(
 
     click.echo(report, nl=False)
     sys.exit(1 if gating else 0)
+
+
+@cli.command(name="rules")
+def rules_command() -> None:
+    """List every rule code with its default severity, dialects, and summary."""
+    for entry in catalog():
+        dialects = ",".join(entry.dialects)
+        click.echo(f"{entry.code}  {entry.severity:<7}  {dialects:<14}  {entry.summary}")
+
+
+@cli.command()
+@click.argument("code")
+def explain(code: str) -> None:
+    """Print the full explanation for rule CODE, for example MG001."""
+    entry = find(code.strip().upper())
+    if entry is None:
+        _abort(f'unknown rule code "{code}"; run migrate-guard rules for the list')
+    click.echo(f"{entry.code}  {entry.severity}  {','.join(entry.dialects)}")
+    click.echo(entry.summary)
+    click.echo("")
+    click.echo(entry.explanation.strip())
 
 
 def _use_color(no_color: bool) -> bool:

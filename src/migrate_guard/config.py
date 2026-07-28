@@ -53,6 +53,7 @@ class Config:
 def load_config(
     config_path: str | None,
     dialect_override: str | None = None,
+    postgres_version_override: int | None = None,
 ) -> Config:
     """Read and validate the config file, then merge the CLI overrides into it.
 
@@ -88,6 +89,14 @@ def load_config(
                 f"accepted values: {', '.join(DIALECTS)}"
             )
         values["dialect"] = dialect_override
+
+    if postgres_version_override is not None:
+        if postgres_version_override <= 0:
+            raise MigrateGuardError(
+                f"invalid --postgres-version {postgres_version_override}; "
+                "it must be a positive integer"
+            )
+        values["postgres_version"] = postgres_version_override
 
     if values.get("dialect") is None:
         raise MigrateGuardError(

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from . import mg001, mg002, mg003, mg004, mg005, mg006, mg007, mg008, mg009
+from dataclasses import dataclass
+
+from . import mg000, mg001, mg002, mg003, mg004, mg005, mg006, mg007, mg008, mg009
 from .base import Rule
 
 REGISTRY: tuple[Rule, ...] = (
@@ -23,8 +25,44 @@ def rules_for(dialect: str) -> tuple[Rule, ...]:
     return tuple(rule for rule in REGISTRY if dialect in rule.dialects)
 
 
-def get_rule(code: str) -> Rule | None:
-    for rule in REGISTRY:
-        if rule.code == code:
-            return rule
+@dataclass(frozen=True, slots=True)
+class RuleInfo:
+    """One row of the documented catalog. MG000 is a diagnostic, not a Rule, so the
+    `rules` and `explain` commands read this view instead of the registry."""
+
+    code: str
+    severity: str
+    dialects: tuple[str, ...]
+    summary: str
+    explanation: str
+
+
+def catalog() -> tuple[RuleInfo, ...]:
+    """Every documented code including MG000, ordered by code."""
+    entries = [
+        RuleInfo(
+            code=mg000.CODE,
+            severity=mg000.SEVERITY,
+            dialects=mg000.DIALECTS,
+            summary=mg000.SUMMARY,
+            explanation=mg000.EXPLANATION,
+        )
+    ]
+    entries.extend(
+        RuleInfo(
+            code=rule.code,
+            severity=rule.severity,
+            dialects=rule.dialects,
+            summary=rule.summary,
+            explanation=rule.explanation,
+        )
+        for rule in REGISTRY
+    )
+    return tuple(sorted(entries, key=lambda entry: entry.code))
+
+
+def find(code: str) -> RuleInfo | None:
+    for entry in catalog():
+        if entry.code == code:
+            return entry
     return None
