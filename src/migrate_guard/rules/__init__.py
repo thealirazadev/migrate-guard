@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import mg001, mg002, mg003, mg004, mg005, mg006, mg007
+from . import mg001, mg002, mg003, mg004, mg005, mg006, mg007, mg008
 from .base import Rule
 
 REGISTRY: tuple[Rule, ...] = (
@@ -13,6 +13,7 @@ REGISTRY: tuple[Rule, ...] = (
     mg005.RULE,
     mg006.RULE,
     mg007.RULE,
+    mg008.RULE,
 )
 
 
