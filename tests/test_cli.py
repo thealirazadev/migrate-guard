@@ -56,6 +56,21 @@ def test_a_multi_action_alter_is_reported_instead_of_vanishing(
     assert "no problems found" not in result.stdout
 
 
+def test_a_pathological_statement_does_not_abort_the_run(
+    run_cli: Callable[..., Result], tmp_path: Path
+) -> None:
+    """One file the parser chokes on must not take the other files down with it."""
+    deep = "SELECT " + "(" * 400 + "1" + ")" * 400
+    (tmp_path / "0100_deep.sql").write_text(f"{deep};\n", encoding="utf-8")
+    (tmp_path / "0101_drop.sql").write_text("DROP TABLE audit_legacy;\n", encoding="utf-8")
+
+    result = run_cli("check", str(tmp_path), "--dialect", "postgres")
+
+    assert result.exit_code == 1
+    assert codes(result.stdout) == ["MG000", "MG004"]
+    assert "internal error" not in result.stderr
+
+
 def test_dialect_gate_changes_the_verdict(run_cli: Callable[..., Result]) -> None:
     postgres = run_cli("check", f"{SQL_UNSAFE}/0042_add_email_index.sql", "--dialect", "postgres")
     mysql = run_cli("check", f"{SQL_UNSAFE}/0042_add_email_index.sql", "--dialect", "mysql")

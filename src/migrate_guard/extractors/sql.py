@@ -20,7 +20,7 @@ import re
 
 import sqlglot
 from sqlglot import exp
-from sqlglot.errors import ParseError, TokenError
+from sqlglot.errors import SqlglotError
 from sqlglot.tokens import Token, TokenType
 
 from ..ir import Finding, Operation, OpKind, SourceSpan, excerpt
@@ -62,7 +62,7 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
     """Map one SQL file to operations plus MG000 diagnostics."""
     try:
         statements = _split(text, dialect)
-    except TokenError:
+    except (SqlglotError, RecursionError):
         span = SourceSpan(file=path, line=1)
         return ExtractionResult(
             diagnostics=(
@@ -84,7 +84,10 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
             expression = sqlglot.parse_one(
                 statement, read=dialect, error_level=sqlglot.ErrorLevel.RAISE
             )
-        except (ParseError, TokenError):
+            mapped = _operations(expression, span, raw)
+        except (SqlglotError, RecursionError):
+            # A parser failure is a problem with the scanned file, so it stays a
+            # finding: one bad statement must not abort the whole run.
             diagnostics.append(
                 mg000.diagnostic(
                     span,
@@ -94,7 +97,6 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
                 )
             )
             continue
-        mapped = _operations(expression, span, raw)
         if not mapped and _is_unmapped_alter_table(expression):
             diagnostics.append(
                 mg000.diagnostic(

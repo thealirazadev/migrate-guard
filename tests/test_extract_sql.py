@@ -77,6 +77,20 @@ def test_unparseable_statement_becomes_mg000_and_the_file_continues() -> None:
     assert result.statement_count == 3
 
 
+def test_a_statement_too_deep_to_parse_stays_a_finding() -> None:
+    """A pathological expression must not abort the run: MG000, then keep going."""
+    deep = "SELECT " + "(" * 400 + "1" + ")" * 400
+    text = f"CREATE INDEX i ON users (email);\n{deep};\nDROP TABLE old;\n"
+
+    result = sql.extract("db/x.sql", text, "postgres")
+
+    assert [op.kind for op in result.operations] == [OpKind.create_index, OpKind.drop_table]
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.code == "MG000"
+    assert diagnostic.span.line == 2
+    assert result.statement_count == 3
+
+
 def test_untokenizable_file_reports_one_diagnostic() -> None:
     result = sql.extract("db/x.sql", "%%$$@@\n", "postgres")
 
