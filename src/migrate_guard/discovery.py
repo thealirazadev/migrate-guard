@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .config import MigrateGuardError
 
-FORMAT_BY_EXTENSION = {".sql": "sql"}
+FORMAT_BY_EXTENSION = {".sql": "sql", ".php": "laravel", ".py": "django"}
 
 
 @dataclass(frozen=True, slots=True)
