@@ -19,20 +19,38 @@ from ..rules import mg000
 from . import ExtractionResult
 from .sql import extract as extract_sql
 
-# Regex for schema builder calls. Matches method chains like:
-# Schema::create('table', function ($table) { $table->... })
-# $table->string('name')->unique()->change();
-# DB::statement('...')
-SCHEMA_CALL = re.compile(
-    r"Schema::(create|table|drop|dropIfExists|rename)\s*\(",
+# Regex for schema builder calls
+SCHEMA_DROP = re.compile(
+    r"Schema::(drop|dropIfExists)\s*\(",
+    re.IGNORECASE,
+)
+SCHEMA_TABLE = re.compile(
+    r"Schema::table\s*\(",
+    re.IGNORECASE,
+)
+SCHEMA_CREATE = re.compile(
+    r"Schema::create\s*\(",
+    re.IGNORECASE,
+)
+SCHEMA_RENAME = re.compile(
+    r"Schema::rename\s*\(",
     re.IGNORECASE,
 )
 DB_STATEMENT = re.compile(
     r"DB::(statement|unprepared)\s*\(",
     re.IGNORECASE,
 )
-COLUMN_METHOD = re.compile(
-    r"\->(change|unique|index|foreign|nullable|constrained|default|dropColumn|renameColumn)\s*\(",
+# Column-level operations inside Schema::table closures
+DROP_COLUMN = re.compile(
+    r"\->dropColumn\s*\(",
+    re.IGNORECASE,
+)
+RENAME_COLUMN = re.compile(
+    r"\->renameColumn\s*\(",
+    re.IGNORECASE,
+)
+CREATE_INDEX = re.compile(
+    r"\->(?:index|unique)\s*\(",
     re.IGNORECASE,
 )
 
@@ -44,44 +62,89 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
 
     operations: list[Operation] = []
     diagnostics: list[Finding] = []
-    line_map: dict[int, int] = _build_line_map(text, cleaned)
 
-    # Find all Schema:: calls
-    for match in SCHEMA_CALL.finditer(cleaned):
+    # Find all Schema::drop calls
+    for match in SCHEMA_DROP.finditer(cleaned):
         line = _line_number(match.start(), cleaned)
-        mapped_line = line_map.get(line, line)
-        op_type = match.group(1).lower()
+        raw_excerpt = _extract_raw_excerpt(text, match.start(), line)
+        span = SourceSpan(file=path, line=line)
+        operations.append(
+            Operation(kind=OpKind.drop_table, span=span, raw=raw_excerpt)
+        )
 
-        raw_excerpt = _extract_raw_excerpt(text, match.start(), mapped_line)
-        span = SourceSpan(file=path, line=mapped_line)
+    # Find all Schema::table calls and extract operations from closures
+    for match in SCHEMA_TABLE.finditer(cleaned):
+        line = _line_number(match.start(), cleaned)
+        raw_excerpt = _extract_raw_excerpt(text, match.start(), line)
+        span = SourceSpan(file=path, line=line)
 
-        if op_type == "create":
-            operations.append(
-                Operation(kind=OpKind.create_table, span=span, raw=raw_excerpt)
-            )
-        elif op_type in ("drop", "dropifexists"):
-            operations.append(
-                Operation(kind=OpKind.drop_table, span=span, raw=raw_excerpt)
-            )
-        elif op_type == "rename":
-            operations.append(
-                Operation(kind=OpKind.rename_table, span=span, raw=raw_excerpt)
-            )
-        elif op_type == "table":
-            # Schema::table calls modify existing tables; check for operations inside
-            operations.extend(_extract_table_operations(cleaned, match, path, line_map))
+        # Find the closure content (between { and })
+        closure_start = cleaned.find("{", match.end())
+        if closure_start != -1:
+            closure_end = _find_matching_brace(cleaned, closure_start)
+            if closure_end != -1:
+                closure_content = cleaned[closure_start:closure_end + 1]
+
+                # Find dropColumn calls
+                for drop_match in DROP_COLUMN.finditer(closure_content):
+                    drop_line = line + closure_content[:drop_match.start()].count("\n")
+                    drop_span = SourceSpan(file=path, line=drop_line)
+                    drop_raw = _extract_raw_excerpt(text, closure_start + drop_match.start(), drop_line)
+                    operations.append(
+                        Operation(kind=OpKind.drop_column, span=drop_span, raw=drop_raw)
+                    )
+
+                # Find renameColumn calls
+                for rename_match in RENAME_COLUMN.finditer(closure_content):
+                    rename_line = line + closure_content[:rename_match.start()].count("\n")
+                    rename_span = SourceSpan(file=path, line=rename_line)
+                    rename_raw = _extract_raw_excerpt(text, closure_start + rename_match.start(), rename_line)
+                    operations.append(
+                        Operation(kind=OpKind.rename_column, span=rename_span, raw=rename_raw)
+                    )
+
+                # Find create index calls
+                for index_match in CREATE_INDEX.finditer(closure_content):
+                    index_line = line + closure_content[:index_match.start()].count("\n")
+                    index_span = SourceSpan(file=path, line=index_line)
+                    index_raw = _extract_raw_excerpt(text, closure_start + index_match.start(), index_line)
+                    operations.append(
+                        Operation(
+                            kind=OpKind.create_index,
+                            span=index_span,
+                            raw=index_raw,
+                            details={"unique": "unique" in index_match.group(0).lower(), "concurrent": False},
+                        )
+                    )
+
+    # Find all Schema::create calls
+    for match in SCHEMA_CREATE.finditer(cleaned):
+        line = _line_number(match.start(), cleaned)
+        raw_excerpt = _extract_raw_excerpt(text, match.start(), line)
+        span = SourceSpan(file=path, line=line)
+        operations.append(
+            Operation(kind=OpKind.create_table, span=span, raw=raw_excerpt)
+        )
+
+    # Find all Schema::rename calls
+    for match in SCHEMA_RENAME.finditer(cleaned):
+        line = _line_number(match.start(), cleaned)
+        raw_excerpt = _extract_raw_excerpt(text, match.start(), line)
+        span = SourceSpan(file=path, line=line)
+        operations.append(
+            Operation(kind=OpKind.rename_table, span=span, raw=raw_excerpt)
+        )
 
     # Find all DB::statement and DB::unprepared calls with SQL literals
     for match in DB_STATEMENT.finditer(cleaned):
         line = _line_number(match.start(), cleaned)
-        mapped_line = line_map.get(line, line)
 
         # Try to extract the literal argument
         literal = _extract_literal_argument(cleaned, match.end())
         if literal is None:
             # Variable argument - cannot extract
-            span = SourceSpan(file=path, line=mapped_line)
-            raw = _extract_raw_excerpt(text, match.start(), mapped_line)
+            span = SourceSpan(file=path, line=line)
+            raw = _extract_raw_excerpt(text, match.start(), line)
             diagnostics.append(
                 mg000.diagnostic(
                     span,
@@ -182,30 +245,6 @@ def _strip_comments_and_strings(text: str) -> str:
     return "".join(result)
 
 
-def _build_line_map(original: str, cleaned: str) -> dict[int, int]:
-    """Map positions in the cleaned text back to line numbers in the original."""
-    mapping = {}
-    original_lines = original.split("\n")
-    cleaned_lines = cleaned.split("\n")
-
-    original_line = 1
-    for cleaned_line_idx, cleaned_line in enumerate(cleaned_lines):
-        # Find matching original line
-        while original_line <= len(original_lines):
-            original_line_text = original_lines[original_line - 1]
-            # Strip comments/strings from original line for comparison
-            if original_line_text.strip():
-                mapping[cleaned_line_idx + 1] = original_line
-            if original_line_text == cleaned_line or (
-                cleaned_line.strip()
-                and original_line_text.strip()
-            ):
-                break
-            original_line += 1
-
-    return mapping
-
-
 def _line_number(pos: int, text: str) -> int:
     """Get 1-based line number for a position in text."""
     return text[:pos].count("\n") + 1
@@ -219,45 +258,38 @@ def _extract_raw_excerpt(text: str, pos: int, line: int) -> str:
     return excerpt(text)
 
 
-def _extract_table_operations(
-    cleaned: str, match: re.Match, path: str, line_map: dict[int, int]
-) -> list[Operation]:
-    """Extract operations from within a Schema::table() closure."""
-    # For now, return empty list; the actual column operations would be
-    # detected by COLUMN_METHOD patterns within the table closure
-    # This is a simplified implementation that catches the common patterns
-    operations = []
+def _find_matching_brace(text: str, start: int) -> int:
+    """Find the closing brace matching the opening brace at start."""
+    if start >= len(text) or text[start] != "{":
+        return -1
 
-    # Find the position after the opening paren
-    start = match.end()
-    # Look for column definition methods in the following content
-    for col_match in COLUMN_METHOD.finditer(cleaned[start:]):
-        method = col_match.group(1).lower()
-        abs_pos = start + col_match.start()
-        line = _line_number(abs_pos, cleaned)
-        mapped_line = line_map.get(line, line)
+    count = 1
+    i = start + 1
+    in_string = False
+    string_char = None
 
-        if method == "change":
-            # ALTER COLUMN TYPE or change operations
-            pass  # Details would require more context
-        elif method == "dropcol":
-            operations.append(
-                Operation(
-                    kind=OpKind.drop_column,
-                    span=SourceSpan(file=path, line=mapped_line),
-                    raw=_extract_raw_excerpt("", abs_pos, mapped_line),
-                )
-            )
-        elif method == "renamecolumn":
-            operations.append(
-                Operation(
-                    kind=OpKind.rename_column,
-                    span=SourceSpan(file=path, line=mapped_line),
-                    raw=_extract_raw_excerpt("", abs_pos, mapped_line),
-                )
-            )
+    while i < len(text) and count > 0:
+        char = text[i]
 
-    return operations
+        # Handle strings
+        if char in ('"', "'") and (i == 0 or text[i - 1] != "\\"):
+            if not in_string:
+                in_string = True
+                string_char = char
+            elif char == string_char:
+                in_string = False
+                string_char = None
+
+        # Count braces only outside strings
+        if not in_string:
+            if char == "{":
+                count += 1
+            elif char == "}":
+                count -= 1
+
+        i += 1
+
+    return i - 1 if count == 0 else -1
 
 
 def _extract_literal_argument(text: str, pos: int) -> str | None:
