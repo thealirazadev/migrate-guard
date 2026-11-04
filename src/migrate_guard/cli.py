@@ -18,7 +18,7 @@ from . import __version__
 from .config import MigrateGuardError, load_config
 from .discovery import discover, read_source
 from .engine import check_file, sort_findings
-from .extractors import sql, laravel, django
+from .extractors import django, laravel, sql
 from .reporters import text as text_reporter
 from .rules import catalog, find
 

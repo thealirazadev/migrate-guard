@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from migrate_guard.extractors import laravel
 from migrate_guard.ir import OpKind
 

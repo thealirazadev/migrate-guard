@@ -14,7 +14,7 @@ from __future__ import annotations
 import ast
 from typing import Any
 
-from ..ir import Allow, Finding, Operation, OpKind, SourceSpan, excerpt
+from ..ir import Finding, Operation, OpKind, SourceSpan, excerpt
 from ..rules import mg000
 from . import ExtractionResult
 from .sql import extract as extract_sql
@@ -36,7 +36,7 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
                 ),
             )
         )
-    except Exception as exc:
+    except Exception:
         span = SourceSpan(file=path, line=1)
         return ExtractionResult(
             diagnostics=(
@@ -95,17 +95,11 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
 
         # Map known operations
         if op_class == "CreateModel":
-            operations.append(
-                Operation(kind=OpKind.create_table, span=span, raw=raw)
-            )
+            operations.append(Operation(kind=OpKind.create_table, span=span, raw=raw))
         elif op_class == "DeleteModel":
-            operations.append(
-                Operation(kind=OpKind.drop_table, span=span, raw=raw)
-            )
+            operations.append(Operation(kind=OpKind.drop_table, span=span, raw=raw))
         elif op_class == "RenameModel":
-            operations.append(
-                Operation(kind=OpKind.rename_table, span=span, raw=raw)
-            )
+            operations.append(Operation(kind=OpKind.rename_table, span=span, raw=raw))
         elif op_class == "AddField":
             details = _extract_add_field(op_node)
             operations.append(
@@ -117,22 +111,26 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
                 )
             )
         elif op_class == "RemoveField":
-            operations.append(
-                Operation(kind=OpKind.drop_column, span=span, raw=raw)
-            )
+            operations.append(Operation(kind=OpKind.drop_column, span=span, raw=raw))
         elif op_class == "RenameField":
-            operations.append(
-                Operation(kind=OpKind.rename_column, span=span, raw=raw)
-            )
+            operations.append(Operation(kind=OpKind.rename_column, span=span, raw=raw))
         elif op_class == "AlterField":
             operations.append(
-                Operation(kind=OpKind.alter_column_type, span=span, raw=raw,
-                          details={"old_type": None, "new_type": None})
+                Operation(
+                    kind=OpKind.alter_column_type,
+                    span=span,
+                    raw=raw,
+                    details={"old_type": None, "new_type": None},
+                )
             )
         elif op_class == "AddIndex":
             operations.append(
-                Operation(kind=OpKind.create_index, span=span, raw=raw,
-                          details={"unique": False, "concurrent": False})
+                Operation(
+                    kind=OpKind.create_index,
+                    span=span,
+                    raw=raw,
+                    details={"unique": False, "concurrent": False},
+                )
             )
         elif op_class == "AddIndexConcurrently":
             atomic = _get_atomic_setting(migration_class, text)
@@ -144,15 +142,14 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
                     details={"unique": False, "concurrent": atomic is False},
                 )
             )
-        elif op_class == "AddConstraint":
+        elif op_class == "AddConstraint" or op_class == "AlterUniqueTogether":
             operations.append(
-                Operation(kind=OpKind.add_unique_constraint, span=span, raw=raw,
-                          details={"using_index": False})
-            )
-        elif op_class == "AlterUniqueTogether":
-            operations.append(
-                Operation(kind=OpKind.add_unique_constraint, span=span, raw=raw,
-                          details={"using_index": False})
+                Operation(
+                    kind=OpKind.add_unique_constraint,
+                    span=span,
+                    raw=raw,
+                    details={"using_index": False},
+                )
             )
         elif op_class == "RunSQL":
             # Extract the SQL literal and route through SQL extractor
@@ -187,17 +184,18 @@ def _find_migration_class(tree: ast.Module) -> ast.ClassDef | None:
     return None
 
 
-def _find_operations_list(
-    migration_class: ast.ClassDef, text: str
-) -> list[ast.expr] | None:
+def _find_operations_list(migration_class: ast.ClassDef, text: str) -> list[ast.expr] | None:
     """Find the operations list assignment in the Migration class."""
     for node in migration_class.body:
         if isinstance(node, ast.Assign):
             # Check if this is assigning to 'operations'
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "operations":
-                    if isinstance(node.value, ast.List):
-                        return node.value.elts
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == "operations"
+                    and isinstance(node.value, ast.List)
+                ):
+                    return node.value.elts
     return None
 
 
@@ -220,34 +218,28 @@ def _extract_add_field(op_node: ast.Call) -> dict[str, Any]:
     }
 
     for keyword in op_node.keywords:
-        if keyword.arg == "field":
-            # Extract field type and constraints
-            if isinstance(keyword.value, ast.Call):
-                field_class = _get_call_name(keyword.value.func)
-                details["type"] = field_class or None
+        # Extract field type and constraints
+        if keyword.arg == "field" and isinstance(keyword.value, ast.Call):
+            field_class = _get_call_name(keyword.value.func)
+            details["type"] = field_class or None
 
-                # Check for null=False (not null)
-                for field_kw in keyword.value.keywords:
-                    if field_kw.arg == "null":
-                        if isinstance(field_kw.value, ast.Constant):
-                            details["not_null"] = field_kw.value.value is False
+            # Check for null=False (not null)
+            for field_kw in keyword.value.keywords:
+                if field_kw.arg == "null" and isinstance(field_kw.value, ast.Constant):
+                    details["not_null"] = field_kw.value.value is False
 
-                    # Check for default
-                    if field_kw.arg == "default":
-                        details["has_default"] = True
-                        details["default_volatile"] = _is_volatile_default(field_kw.value)
+                # Check for default
+                if field_kw.arg == "default":
+                    details["has_default"] = True
+                    details["default_volatile"] = _is_volatile_default(field_kw.value)
 
     return details
 
 
 def _is_volatile_default(node: ast.expr) -> bool:
     """Check if a default value is volatile (contains function calls)."""
-    if isinstance(node, ast.Call):
-        return True
-    if isinstance(node, ast.Subscript):
-        return True
-    # Anything else is treated as constant
-    return False
+    # Anything other than a call or a subscript is treated as constant
+    return isinstance(node, (ast.Call, ast.Subscript))
 
 
 def _extract_runsql_literal(op_node: ast.Call) -> str | None:
@@ -265,9 +257,12 @@ def _get_atomic_setting(migration_class: ast.ClassDef, text: str) -> bool | None
     for node in migration_class.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "atomic":
-                    if isinstance(node.value, ast.Constant):
-                        return node.value.value
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == "atomic"
+                    and isinstance(node.value, ast.Constant)
+                ):
+                    return node.value.value
     return None
 
 

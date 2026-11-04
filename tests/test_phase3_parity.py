@@ -6,9 +6,9 @@ identical rule codes, and that booby-trapped fixtures never cause side effects.
 
 from __future__ import annotations
 
-from migrate_guard.extractors import sql, laravel, django
-from migrate_guard.engine import check_file
 from migrate_guard.config import Config
+from migrate_guard.engine import check_file
+from migrate_guard.extractors import django, laravel, sql
 
 
 def test_parity_drop_column_produces_same_codes() -> None:
@@ -68,9 +68,7 @@ def test_laravel_booby_trap_never_executes() -> None:
         text = f.read()
 
     # This should not execute any PHP code
-    result = laravel.extract(
-        "tests/fixtures/laravel/unsafe/booby_trap_eval.php", text, "postgres"
-    )
+    result = laravel.extract("tests/fixtures/laravel/unsafe/booby_trap_eval.php", text, "postgres")
 
     # We should have extracted operations without executing the backtick
     assert isinstance(result.operations, tuple)
@@ -85,9 +83,7 @@ def test_django_booby_trap_never_imports() -> None:
         text = f.read()
 
     # This should not import the file or trigger any side effects
-    result = django.extract(
-        "tests/fixtures/django/unsafe/booby_trap_import.py", text, "postgres"
-    )
+    result = django.extract("tests/fixtures/django/unsafe/booby_trap_import.py", text, "postgres")
 
     # We should have extracted operations without importing
     assert isinstance(result.operations, tuple)
@@ -95,6 +91,7 @@ def test_django_booby_trap_never_imports() -> None:
 
     # Verify the booby trap marker was not set
     import sys
+
     assert "tests/fixtures/django/unsafe/booby_trap_import" not in sys.modules
 
 
