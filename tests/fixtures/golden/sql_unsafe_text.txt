@@ -114,6 +114,14 @@ tests/fixtures/sql/postgres/unsafe/0052_add_created_at.sql
                           batches, then run ALTER TABLE users ALTER COLUMN
                           created_at SET DEFAULT ...; for new rows.
 
-checked 11 files, 16 statements
-15 findings: 13 errors (13 gating), 2 warnings, 0 allowed
+tests/fixtures/sql/postgres/unsafe/parity_drop_column.sql
+  2  MG004  error    DROP COLUMN removes legacy_field from users permanently,
+                     and the previous release may still read it.
+                     statement: ALTER TABLE users DROP COLUMN legacy_field
+                     fix: Stop writing legacy_field, ship that version, then
+                          drop it in a later migration once no running code
+                          selects it.
+
+checked 12 files, 17 statements
+16 findings: 14 errors (14 gating), 2 warnings, 0 allowed
 verdict: FAIL (fail_on = error)
