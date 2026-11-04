@@ -57,7 +57,7 @@ with the false-positive discipline to be trusted.
 
 ## Status
 
-This project is in the planning stage: the documents above are the complete specification, and
-no implementation code exists yet. Implementation follows `docs/phases.md` phase by phase,
-starting with the raw-SQL pipeline. Everything described here is planned behavior, not shipped
-behavior.
+Phases 1 and 2 are complete: the foundation and raw-SQL pipeline, and the full rule catalog with
+false-positive discipline. Phase 3 (Laravel and Django extractors) has not started yet.
+Implementation follows `docs/phases.md` phase by phase; behavior from Phase 3 onward described
+here is planned, not shipped.
