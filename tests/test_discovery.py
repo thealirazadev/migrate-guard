@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -65,6 +66,9 @@ def test_no_paths_is_an_error() -> None:
     assert excinfo.value.remedy is not None
 
 
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads files regardless of mode"
+)
 def test_unreadable_file_is_an_error(tmp_path: Path) -> None:
     target = tmp_path / "0001.sql"
     target.write_text("SELECT 1;\n", encoding="utf-8")
