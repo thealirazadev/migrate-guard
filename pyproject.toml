@@ -45,10 +45,13 @@ packages = ["src/migrate_guard"]
 [tool.black]
 line-length = 100
 target-version = ["py312"]
+# Fixtures are scanned input, kept exactly as a framework would write them.
+extend-exclude = "^/tests/fixtures/"
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["tests/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
