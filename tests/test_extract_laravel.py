@@ -56,3 +56,48 @@ def test_laravel_extract_from_unsafe_fixture() -> None:
     )
     # Should parse without crashes
     assert isinstance(result.operations, tuple)
+
+
+def test_laravel_down_method_is_not_checked() -> None:
+    text = """<?php
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('legacy_flag');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('users');
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('replacement');
+        });
+    }
+};
+"""
+    result = laravel.extract("migrations/0004.php", text, "postgres")
+
+    assert [(op.kind, op.span.line) for op in result.operations] == [(OpKind.drop_column, 7)]
+
+
+def test_laravel_function_named_like_down_is_still_checked() -> None:
+    text = """<?php
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $this->downgrade();
+    }
+
+    private function downgrade(): void
+    {
+        Schema::dropIfExists('users');
+    }
+};
+"""
+    result = laravel.extract("migrations/0005.php", text, "postgres")
+
+    assert [op.kind for op in result.operations] == [OpKind.drop_table]

@@ -53,12 +53,14 @@ CREATE_INDEX = re.compile(
     r"\->(?:index|unique)\s*\(",
     re.IGNORECASE,
 )
+# down() with an optional return type, up to its opening brace
+DOWN_METHOD = re.compile(r"\bfunction\s+down\s*\(\s*\)\s*(?::\s*\??\w+\s*)?\{", re.IGNORECASE)
 
 
 def extract(path: str, text: str, dialect: str) -> ExtractionResult:
     """Map one Laravel migration file to operations plus MG000 diagnostics."""
     # Strip comments and string contents to avoid false positives
-    cleaned = _strip_comments_and_strings(text)
+    cleaned = _blank_down_methods(_strip_comments_and_strings(text))
 
     operations: list[Operation] = []
     diagnostics: list[Finding] = []
@@ -246,6 +248,25 @@ def _strip_comments_and_strings(text: str) -> str:
         i += 1
 
     return "".join(result)
+
+
+def _blank_down_methods(cleaned: str) -> str:
+    """Blank out every down() body, keeping newlines so line numbers still match.
+
+    down() is the rollback path: the Schema::dropIfExists in a plain create-table
+    migration never runs on deploy, so reporting it as MG004 would fail every
+    such file.
+    """
+    chars = list(cleaned)
+    for match in DOWN_METHOD.finditer(cleaned):
+        start = match.end() - 1
+        end = _find_matching_brace(cleaned, start)
+        if end == -1:
+            continue
+        for position in range(start + 1, end):
+            if chars[position] != "\n":
+                chars[position] = " "
+    return "".join(chars)
 
 
 def _line_number(pos: int, text: str) -> int:
