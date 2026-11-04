@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from migrate_guard.config import Config
+from migrate_guard.engine import check_file
 from migrate_guard.extractors import laravel
 from migrate_guard.ir import OpKind
 
@@ -40,10 +42,10 @@ Schema::table('users', function ($table) {
 
 
 def test_laravel_extract_from_safe_fixture() -> None:
-    with open("tests/fixtures/laravel/safe/simple_index.php") as f:
+    with open("tests/fixtures/laravel/safe/create_table.php") as f:
         text = f.read()
 
-    result = laravel.extract("tests/fixtures/laravel/safe/simple_index.php", text, "postgres")
+    result = laravel.extract("tests/fixtures/laravel/safe/create_table.php", text, "postgres")
     assert result.diagnostics == ()
 
 
@@ -101,3 +103,14 @@ return new class extends Migration
     result = laravel.extract("migrations/0005.php", text, "postgres")
 
     assert [op.kind for op in result.operations] == [OpKind.drop_table]
+
+
+def test_laravel_index_on_existing_table_reports_mg002() -> None:
+    path = "tests/fixtures/laravel/unsafe/simple_index.php"
+    with open(path) as f:
+        text = f.read()
+
+    result = laravel.extract(path, text, "postgres")
+    findings = check_file(result, Config(dialect="postgres"))
+
+    assert [(f.code, f.span.line) for f in findings] == [("MG002", 12)]

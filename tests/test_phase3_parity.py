@@ -100,7 +100,7 @@ def test_safe_fixtures_produce_no_findings() -> None:
     config = Config(dialect="postgres", postgres_version=16, paths=[], ignore=[], fail_on="error")
 
     # Laravel safe fixture
-    with open("tests/fixtures/laravel/safe/simple_index.php") as f:
+    with open("tests/fixtures/laravel/safe/create_table.php") as f:
         laravel_text = f.read()
     laravel_result = laravel.extract("safe.php", laravel_text, "postgres")
     laravel_findings = check_file(laravel_result, config)
