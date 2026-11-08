@@ -31,6 +31,11 @@ work; log every non-obvious decision with its reason. Keep entries short and dat
   fails on the parent commit and passes on the fix. Nothing else in the Phase 2 diff needed a
   change; the rule matrix, the dialect gates, the version gates, and the new-table exemption all
   held up under probing.
+- 2026-11-08 - CI fixed after the 2026-08-16 phase 3 work-in-progress commit. The Laravel "safe"
+  fixture added a plain index, which on Postgres is a non-concurrent CREATE INDEX that MG002
+  correctly flags; it now adds a nullable column instead. The SQL golden report was regenerated
+  to include the new parity_drop_column fixture. Lint and formatting fixed. 282 tests pass.
+  Phase 3 itself has not been re-verified against its checklist.
 
 ## Project status
 
