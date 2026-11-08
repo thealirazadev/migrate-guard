@@ -12,6 +12,8 @@ Non-migration Python files are reported as MG000.
 from __future__ import annotations
 
 import ast
+import dataclasses
+from pathlib import PurePath
 from typing import Any
 
 from ..ir import Finding, Operation, OpKind, SourceSpan, excerpt
@@ -81,9 +83,11 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
     operations: list[Operation] = []
     diagnostics: list[Finding] = []
 
+    app_label = _app_label(path)
     for op_node in operations_list:
         if not isinstance(op_node, ast.Call):
             continue
+        first_new = len(operations)
 
         span = SourceSpan(file=path, line=op_node.lineno or 1)
         raw = _get_operation_raw(text, op_node)
@@ -168,12 +172,60 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
                 operations.extend(result.operations)
                 diagnostics.extend(result.diagnostics)
         # RunPython is ignored by design
+        if op_class != "RunSQL":
+            table, column = _names(op_class, op_node, app_label)
+            for i in range(first_new, len(operations)):
+                operations[i] = dataclasses.replace(operations[i], table=table, column=column)
 
     return ExtractionResult(
         operations=tuple(operations),
         diagnostics=tuple(diagnostics),
         statement_count=len(operations),
     )
+
+
+# Where each operation keeps its model and field name: (keyword, position).
+_MODEL_ARG: dict[str, tuple[str, int]] = {
+    "CreateModel": ("name", 0),
+    "DeleteModel": ("name", 0),
+    "RenameModel": ("old_name", 0),
+    "AlterUniqueTogether": ("name", 0),
+}
+_FIELD_ARG: dict[str, tuple[str, int]] = {
+    "AddField": ("name", 1),
+    "RemoveField": ("name", 1),
+    "AlterField": ("name", 1),
+    "RenameField": ("old_name", 1),
+}
+
+
+def _app_label(path: str) -> str | None:
+    """The app owning `<app>/migrations/<file>.py`, which prefixes Django's default table name."""
+    parts = PurePath(path).parts
+    return parts[-3] if len(parts) >= 3 and parts[-2] == "migrations" else None
+
+
+def _arg(op_node: ast.Call, keyword: str, position: int) -> str | None:
+    for kw in op_node.keywords:
+        if kw.arg == keyword and isinstance(kw.value, ast.Constant):
+            value = kw.value.value
+            return value if isinstance(value, str) else None
+    if len(op_node.args) > position and isinstance(op_node.args[position], ast.Constant):
+        value = op_node.args[position].value
+        return value if isinstance(value, str) else None
+    return None
+
+
+def _names(
+    op_class: str, op_node: ast.Call, app_label: str | None
+) -> tuple[str | None, str | None]:
+    """Table and column for an operation, using Django's default `<app>_<model>` table name."""
+    model = _arg(op_node, *_MODEL_ARG.get(op_class, ("model_name", 0)))
+    column = _arg(op_node, *_FIELD_ARG[op_class]) if op_class in _FIELD_ARG else None
+    if model is None:
+        return None, column
+    table = f"{app_label}_{model.lower()}" if app_label else model.lower()
+    return table, column
 
 
 def _find_migration_class(tree: ast.Module) -> ast.ClassDef | None:
