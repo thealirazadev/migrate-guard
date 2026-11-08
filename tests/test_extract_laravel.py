@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from migrate_guard.extractors import laravel
 from migrate_guard.ir import OpKind
 
@@ -42,10 +40,12 @@ Schema::table('users', function ($table) {
 
 
 def test_laravel_extract_from_safe_fixture() -> None:
-    with open("tests/fixtures/laravel/safe/simple_index.php") as f:
+    with open("tests/fixtures/laravel/safe/simple_add_nullable_column.php") as f:
         text = f.read()
 
-    result = laravel.extract("tests/fixtures/laravel/safe/simple_index.php", text, "postgres")
+    result = laravel.extract(
+        "tests/fixtures/laravel/safe/simple_add_nullable_column.php", text, "postgres"
+    )
     assert result.diagnostics == ()
 
 
