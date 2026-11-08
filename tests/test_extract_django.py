@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from migrate_guard.extractors import django
 from migrate_guard.ir import OpKind
 
@@ -100,9 +98,7 @@ def test_django_extract_from_unsafe_fixture() -> None:
     with open("tests/fixtures/django/unsafe/parity_drop_column.py") as f:
         text = f.read()
 
-    result = django.extract(
-        "tests/fixtures/django/unsafe/parity_drop_column.py", text, "postgres"
-    )
+    result = django.extract("tests/fixtures/django/unsafe/parity_drop_column.py", text, "postgres")
     assert len(result.operations) > 0
 
 
