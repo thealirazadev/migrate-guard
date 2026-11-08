@@ -82,7 +82,7 @@ Runtime dependencies: sqlglot and click. Everything else is standard library.
 ## Data model
 
 migrate-guard has no database (runtime inspection is a non-goal); the data model is the frozen
-dataclasses in `ir.py` plus the config schema, and the coding agent must not rename fields.
+dataclasses in `ir.py` plus the config schema, and implementations must not rename fields.
 `SourceSpan` is `(file: str, line: int)` - the path as given, 1-based first line of the
 statement or call.
 
