@@ -143,7 +143,13 @@ def extract(path: str, text: str, dialect: str) -> ExtractionResult:
                     kind=OpKind.create_index,
                     span=span,
                     raw=raw,
-                    details={"unique": False, "concurrent": atomic is False},
+                    details={
+                        "unique": False,
+                        "concurrent": atomic is False,
+                        # Asked for CONCURRENTLY but left atomic: Postgres refuses it in a
+                        # transaction, so the rule explains the atomic fix, not CONCURRENTLY.
+                        "needs_non_atomic": atomic is not False,
+                    },
                 )
             )
         elif op_class == "AddConstraint" or op_class == "AlterUniqueTogether":

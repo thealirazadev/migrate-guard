@@ -59,6 +59,19 @@ Suppress one occurrence with an inline allow carrying a reason:
         if op.kind is not OpKind.create_index or op.details.get("concurrent"):
             return None
         target = op.table or "the table"
+        if op.details.get("needs_non_atomic"):
+            return Finding(
+                code=self.code,
+                severity=self.severity,
+                span=op.span,
+                table=op.table,
+                message=(
+                    f"AddIndexConcurrently on {target} runs inside the migration's "
+                    "transaction, where Postgres refuses CREATE INDEX CONCURRENTLY."
+                ),
+                safe_alternative="Set atomic = False on the Migration class.",
+                statement=op.raw,
+            )
         return Finding(
             code=self.code,
             severity=self.severity,
