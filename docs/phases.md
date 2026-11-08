@@ -142,15 +142,15 @@ same findings as its raw-SQL equivalent, still without executing anything.
 
 ### Verification checklist
 
-- [ ] The parity fixture trio (SQL, Laravel, Django versions of the same migration) produces
+- [x] The parity fixture trio (SQL, Laravel, Django versions of the same migration) produces
       identical rule codes at plausible lines.
-- [ ] Booby-trap fixtures (Django top-level side effect, PHP backticks/eval) are scanned with
+- [x] Booby-trap fixtures (Django top-level side effect, PHP backticks/eval) are scanned with
       zero side effects, asserted by test.
-- [ ] `AddIndexConcurrently` without `atomic = False` fires MG002 with the atomic message; with
+- [x] `AddIndexConcurrently` without `atomic = False` fires MG002 with the atomic message; with
       it, no finding.
-- [ ] `DB::statement` with a variable argument yields MG000, not a guess; a Laravel file whose
+- [x] `DB::statement` with a variable argument yields MG000, not a guess; a Laravel file whose
       schema calls sit inside comments yields nothing.
-- [ ] A 1 MB single-line PHP file completes in under a second (regex boundedness).
+- [x] A 1 MB single-line PHP file completes in under a second (regex boundedness).
 - [ ] ruff, black, pytest clean; CI green.
 
 ---

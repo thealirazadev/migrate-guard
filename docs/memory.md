@@ -206,3 +206,23 @@ work; log every non-obvious decision with its reason. Keep entries short and dat
   engine skipped it while the rule still counted it, so a later backfill on a live table went
   unreported and the mixed file passed. A file whose only data statement is that seed is still
   silent, which is the case the original entry meant to protect.
+
+## Phase 3 verified on real migrations (2026-11-09)
+
+- Ran the extractors on real code: 20 Laravel migrations from laravel-shortlink and
+  laravel-uptime, and Django's own contrib migrations (auth, contenttypes, admin, sessions,
+  sites). Fixes found by that run:
+  - Laravel: every create-table migration failed MG004 because `Schema::dropIfExists` in
+    `down()` was linted. Only `up()` runs on deploy, so extraction now covers `up()` alone
+    (files without one are scanned whole). Both repos went from 11 and 19 errors to clean.
+  - Django: operations carried no table or column, so messages said "the table" and the
+    new-table exemptions never matched (contenttypes' AlterUniqueTogether on a table created
+    in the same file was a false MG007). Operations now use Django's default `<app>_<model>`
+    table and the field name.
+  - Every `migrations/__init__.py` produced an MG000 warning; package markers are skipped.
+  - `AddIndexConcurrently` without `atomic = False` reported "CREATE INDEX without
+    CONCURRENTLY"; it now explains that Postgres refuses CONCURRENTLY inside the transaction
+    and that the fix is `atomic = False`.
+- Remaining MG001 findings on Django `AlterField` (for example `auth_user.email`) are by
+  design: a single migration does not show the old type, and unknown-old-type changes are
+  never assumed safe; a varchar widening gets an inline allow, as documented.
