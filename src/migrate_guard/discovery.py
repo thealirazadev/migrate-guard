@@ -74,6 +74,8 @@ def _walk(root: Path) -> list[Path]:
             child = Path(directory) / filename
             if child.suffix.lower() not in FORMAT_BY_EXTENSION:
                 continue
+            if filename == "__init__.py":
+                continue  # the package marker every Django migrations folder has
             if child.is_symlink() and not _resolve(child).is_relative_to(boundary):
                 continue
             collected.append(child)
