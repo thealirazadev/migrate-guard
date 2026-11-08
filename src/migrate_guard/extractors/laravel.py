@@ -55,10 +55,34 @@ CREATE_INDEX = re.compile(
 )
 
 
+UP_METHOD = re.compile(r"function\s+up\s*\(")
+
+
+def _only_up_method(cleaned: str) -> str:
+    """Blank everything outside `up()`, keeping offsets and newlines so lines stay right.
+
+    `down()` runs only on rollback, never on deploy, so its `Schema::dropIfExists` (present in
+    every create-table migration) is not a deploy-time drop. Files without an `up()` method
+    (unusual layouts) are scanned whole.
+    """
+    match = UP_METHOD.search(cleaned)
+    if match is None:
+        return cleaned
+    start = cleaned.find("{", match.end())
+    end = _find_matching_brace(cleaned, start) if start != -1 else -1
+    if end == -1:
+        return cleaned
+
+    def blank(segment: str) -> str:
+        return "".join(ch if ch == "\n" else " " for ch in segment)
+
+    return blank(cleaned[:start]) + cleaned[start : end + 1] + blank(cleaned[end + 1 :])
+
+
 def extract(path: str, text: str, dialect: str) -> ExtractionResult:
     """Map one Laravel migration file to operations plus MG000 diagnostics."""
     # Strip comments and string contents to avoid false positives
-    cleaned = _strip_comments_and_strings(text)
+    cleaned = _only_up_method(_strip_comments_and_strings(text))
 
     operations: list[Operation] = []
     diagnostics: list[Finding] = []
