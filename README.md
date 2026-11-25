@@ -17,21 +17,31 @@ during the deploy window, and the safe/unsafe line moves between database versio
 11+). Reviewers cannot carry all of that in their heads; migrate-guard encodes it as a CI gate
 with the false-positive discipline to be trusted.
 
-## Planned features
+## Features
 
 - Nine rules, MG001-MG009: table-rewriting and lock-taking ALTERs, non-concurrent index
   creation, NOT NULL columns without a default or backfill, destructive drops (justification
   required), renames, eagerly validated foreign keys, unique constraints without a concurrent
-  index first, enum value removal, and DDL/DML mixing on MySQL.
+  index first, enum value removal, and DDL/DML mixing on MySQL. MG000 reports what could not
+  be analyzed.
 - Dialect and version awareness: `postgres` or `mysql`, with `postgres_version` deciding what
   is actually dangerous. Safe forms are recognized and never flagged.
 - Three input formats normalized to one internal operation model: raw SQL, Laravel schema
   builder calls, Django migration operations - all extracted without executing any code.
 - `.migrateguard.toml` config: dialect, paths, ignored rules, and per-file allows with a
-  mandatory written justification; inline allow comments for per-site waivers.
+  mandatory written justification.
+- Inline allow comments for per-site waivers, for example
+  `-- migrate-guard: allow MG004 reason="audit_legacy retired, OPS-1123"`. An allowed finding
+  is still reported with its reason but never gates; a malformed allow exits 2, and an allow
+  that matches nothing prints a warning.
+- Human-readable text output; exit codes 0/1/2 gate CI.
+
+## Planned
+
 - Diff-base adoption mode: lint only migration files changed since a git ref, so repos with
   years of history start clean.
-- Output as human text, JSON, or GitHub annotations; exit codes gate CI.
+- JSON and GitHub annotation output, and `--fail-on` as a flag (today `fail_on` is set in the
+  config file).
 - A composite GitHub Action wrapping the CLI, with PR-aware diff-base defaults.
 
 ## Stack
@@ -55,8 +65,7 @@ with the false-positive discipline to be trusted.
 
 Work in progress. Implemented today: the `check`, `rules` and `explain` commands, all nine rules
 plus MG000 diagnostics, the SQL, Laravel and Django extractors, strict `.migrateguard.toml`
-validation, `--dialect` and `--postgres-version`, and the text reporter with 0/1/2 exit codes.
-Not built yet: applying inline and config allows and the `ignore` list (the config loader
-validates them but does not apply them), diff-base mode, JSON and GitHub output, `--fail-on` as
-a flag, and the GitHub Action. Those parts of this README and of `docs/` describe planned
+validation, the `ignore` list, config and inline allows, `--dialect` and `--postgres-version`,
+and the text reporter with 0/1/2 exit codes. Not built yet: diff-base mode, JSON and GitHub
+output, `--fail-on` as a flag, and the GitHub Action. Those parts of `docs/` describe planned
 behavior.

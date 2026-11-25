@@ -14,7 +14,7 @@ from typing import NoReturn
 
 import click
 
-from . import __version__
+from . import __version__, allows
 from .config import MigrateGuardError, load_config
 from .discovery import discover, read_source
 from .engine import check_file, sort_findings
@@ -65,13 +65,16 @@ def check(
         files = discover(list(paths) or list(config.paths))
 
         findings = []
+        warnings: list[str] = []
         statements = 0
         for migration in files:
-            result = EXTRACTORS[migration.format](
-                migration.path, read_source(migration.path), config.dialect
-            )
+            source = read_source(migration.path)
+            inline = allows.parse_inline(migration.path, source, migration.format)
+            result = EXTRACTORS[migration.format](migration.path, source, config.dialect)
             statements += result.statement_count
-            findings.extend(check_file(result, config))
+            findings.extend(
+                allows.apply(check_file(result, config), migration.path, inline, config, warnings)
+            )
 
         findings = sort_findings(findings)
         report = text_reporter.render(
@@ -89,6 +92,8 @@ def check(
             raise
         _abort(f"internal error: {exc}")
 
+    for warning in warnings:
+        click.echo(f"warning: {warning}", err=True)
     click.echo(report, nl=False)
     sys.exit(1 if gating else 0)
 

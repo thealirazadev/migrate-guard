@@ -130,3 +130,17 @@ excerpts are capped at 200 characters and never wrapped. Two runs over the same 
 byte-identical, which the golden-file test relies on. sqlglot's logger is set to `ERROR` at
 startup because it warns on every `Command` fallback, and stderr is reserved for migrate-guard's
 own messages.
+
+## 13. Allows are applied after the rules, never inside them
+
+The `ignore` list, inline allows and config allows were validated from the start but not applied,
+so a documented waiver still failed the build. They are now resolved in `allows.py` after the
+engine runs: ignored codes are dropped, then each inline allow marks the findings with a listed
+code on the first operation at or after its line, then config allows mark their codes across
+their file. An allowed finding stays in the report with its reason and never gates. Inline
+allows are parsed line by line from the source text, so they work the same for all three
+formats and nothing is evaluated. A malformed allow (no or empty reason, an unknown code, an
+unparseable `migrate-guard:` comment) is exit 2 naming file and line, and an allow that matches
+nothing is a stderr warning, because a stale waiver is a silent hole waiting to be reused. Rule
+codes in `ignore`, config allows and inline allows must be codes that exist, not just
+`MG` plus three digits, so a typo such as `MG010` is rejected instead of doing nothing.

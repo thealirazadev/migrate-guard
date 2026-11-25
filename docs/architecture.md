@@ -1,5 +1,9 @@
 # Architecture - migrate-guard
 
+Status: the flow below is the full design. Diff-base mode (`--diff-base`), the JSON and GitHub
+reporters (`--format`), `--fail-on` as a flag and `action.yml` are not built yet; everything else
+described here is.
+
 ## App flow
 
 ```
@@ -67,12 +71,14 @@ Runtime dependencies: sqlglot and click. Everything else is standard library.
   implements diff-base filtering via `git merge-base REF HEAD` plus `git diff --name-only`;
   git failures become exit-2 errors carrying the git stderr line.
 - **`extractors/`** - `sql.py`, `laravel.py`, `django.py`, each implementing
-  `extract(path, text) -> ExtractionResult` (operations + allows + diagnostics). The only
+  `extract(path, text, dialect) -> ExtractionResult` (operations + diagnostics). The only
   layer that knows about file formats; rules never see format-specific detail.
+- **`allows.py`** - Parses inline allow comments (line based, per-format comment markers) and
+  applies the `ignore` list, inline allows, then config allows to one file's findings.
 - **`ir.py`** - `Operation`, `Allow`, `Finding`, `SourceSpan`, the `OpKind` enum. Frozen
   dataclasses; the contract between extractors, engine, and reporters.
-- **`engine.py`** - Runs registered rules over each file's operation list, applies the
-  new-table exemption, then resolves ignores and allows into the final finding list.
+- **`engine.py`** - Runs registered rules over each file's operation list and applies the
+  new-table exemption; `cli.py` then passes the findings through `allows.apply`.
 - **`rules/`** - One module per rule plus `base.py` (the `Rule` protocol and registry); each
   module owns its detection logic, message, safe-alternative text, and the `explain` long form.
 - **`reporters/`** - `text.py`, `json.py`, `github.py`; pure result-to-stdout functions, per `docs/design.md`.
@@ -262,8 +268,12 @@ Inline allow grammar (comment styles per format; grammar identical):
   allow line is exit 2 naming file and line. A suppression that cannot be trusted must never
   half-work.
 - Scope: the allow waives matching findings from the first operation at or after the comment's
-  line; one allow waives one operation's findings per code (no blanket file waivers inline -
-  that is what config allows are for).
+  line that raised a finding with a listed code; one allow waives one operation's findings per
+  code (no blanket file waivers inline - that is what config allows are for).
+- Comment markers: `--` (and MySQL's `#`) in SQL, `//` or `#` in Laravel PHP, `#` in Django.
+- A config allow waives its listed codes anywhere in its `file`, which is matched against the
+  checked path after resolving both relative to the working directory. It warns only when that
+  file was checked and nothing matched, so running on a subset of paths stays quiet.
 
 ### Diff-base mode invariants
 
