@@ -10,7 +10,7 @@
   forms exist as fixtures; a rule change without a fixture change is suspect. Inline strings
   are acceptable only for config-loader and grammar edge cases.
 - **Unit tests** for the pure logic: config validation (every rejection path), the allow
-  grammar, operation mapping per extractor, each rule's `check` against hand-built operation
+  grammar and allow resolution (`test_allows.py`), operation mapping per extractor, each rule's `check` against hand-built operation
   lists (both dialects, `postgres_version` 10/11/12/16), the new-table exemption, same-file
   lookback, and finding sort order.
 - **CLI tests** through Click's `CliRunner`: every exit code, stdout/stderr separation (stdout

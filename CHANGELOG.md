@@ -20,6 +20,10 @@
 - Migration files are discovered from the configured paths, with PHP and Python formats wired in.
 
 ### Fixed
+- Inline allow comments, config `[[allow]]` entries and the `ignore` list are applied; before,
+  they were validated but every finding still gated. Malformed inline allows exit 2, and allows
+  that match nothing print a warning.
+- Rule codes in `ignore` and `[[allow]]` must exist, so a typo is rejected.
 - The MG002 message explains why `atomic = False` is needed for concurrent index creation.
 - Migrations package `__init__` files are skipped during discovery.
 - Django operations get their default table and field names.

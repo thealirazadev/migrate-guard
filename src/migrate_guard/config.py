@@ -152,7 +152,7 @@ def _validate(raw: dict[str, Any], path: Path, text: str) -> dict[str, Any]:
     if "ignore" in raw:
         codes = _string_list(raw["ignore"], "ignore", path)
         for code in codes:
-            if not CODE_PATTERN.match(code):
+            if not CODE_PATTERN.match(code) or code not in known_codes():
                 raise MigrateGuardError(f'invalid rule code "{code}" in ignore in {path}')
             if code in NEVER_IGNORABLE:
                 raise MigrateGuardError(
@@ -195,7 +195,7 @@ def _allow_entries(entries: Any, path: Path) -> tuple[ConfigAllow, ...]:
         if not rules:
             raise MigrateGuardError(f"{location} needs a non-empty rules list")
         for code in rules:
-            if not CODE_PATTERN.match(code):
+            if not CODE_PATTERN.match(code) or code not in known_codes():
                 raise MigrateGuardError(f'invalid rule code "{code}" in {location}')
         reason = entry.get("reason")
         if not isinstance(reason, str) or not reason.strip():
@@ -205,6 +205,13 @@ def _allow_entries(entries: Any, path: Path) -> tuple[ConfigAllow, ...]:
             )
         parsed.append(ConfigAllow(file=file_value, rules=tuple(rules), reason=reason.strip()))
     return tuple(parsed)
+
+
+def known_codes() -> frozenset[str]:
+    """Every documented code, MG000 included. Imported late: the rule modules import config."""
+    from .rules import catalog
+
+    return frozenset(entry.code for entry in catalog())
 
 
 def _string_list(value: Any, key: str, path: Path) -> list[str]:
