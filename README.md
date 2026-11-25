@@ -44,6 +44,19 @@ with the false-positive discipline to be trusted.
   config file).
 - A composite GitHub Action wrapping the CLI, with PR-aware diff-base defaults.
 
+## Quick start
+
+```bash
+uv sync
+uv run migrate-guard check db/migrations --dialect postgres --postgres-version 16
+uv run migrate-guard rules          # list every rule code
+uv run migrate-guard explain MG002  # full explanation of one rule
+```
+
+`check` reads `./.migrateguard.toml` when present (or the file given with `--config`); the
+`--dialect` and `--postgres-version` flags override it. Exit code 0 means clean, 1 means a
+gating finding, 2 means the run failed, for example a bad config or a malformed allow.
+
 ## Stack
 
 - Python 3.12
