@@ -1,4 +1,4 @@
-"""Phase 3 checklist items that had no test: atomic rule, unextractable calls, regex bounds."""
+"""Extractor edge cases: the atomic rule, unextractable calls, and regex bounds."""
 
 from __future__ import annotations
 

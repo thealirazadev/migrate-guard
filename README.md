@@ -45,19 +45,18 @@ with the false-positive discipline to be trusted.
 
 | Document | Contents |
 |---|---|
-| [docs/PRD.md](docs/PRD.md) | Problem, target user, core features, non-goals, success criteria |
 | [docs/architecture.md](docs/architecture.md) | Stack rationale, components, data model, rule catalog, flows, failure modes, invariants |
-| [docs/rules.md](docs/rules.md) | Project-specific engineering rules |
-| [docs/phases.md](docs/phases.md) | Implementation phases with commit lists and verification checklists |
 | [docs/design.md](docs/design.md) | CLI UX: output layouts, color, errors, exit codes |
-| [docs/testing.md](docs/testing.md) | Test strategy, commands, CI plan |
+| [docs/testing.md](docs/testing.md) | Test strategy, commands, CI |
 | [docs/api-contracts.md](docs/api-contracts.md) | CLI commands, config file, allow grammar, JSON schema, action inputs |
-| [docs/launch-checklist.md](docs/launch-checklist.md) | Pre-release checks |
-| [docs/memory.md](docs/memory.md) | Working log and decisions |
+| [docs/decisions.md](docs/decisions.md) | Design decisions and the reasons behind them |
 
 ## Status
 
-This project is in the planning stage: the documents above are the complete specification, and
-no implementation code exists yet. Implementation follows `docs/phases.md` phase by phase,
-starting with the raw-SQL pipeline. Everything described here is planned behavior, not shipped
+Work in progress. Implemented today: the `check`, `rules` and `explain` commands, all nine rules
+plus MG000 diagnostics, the SQL, Laravel and Django extractors, strict `.migrateguard.toml`
+validation, `--dialect` and `--postgres-version`, and the text reporter with 0/1/2 exit codes.
+Not built yet: applying inline and config allows and the `ignore` list (the config loader
+validates them but does not apply them), diff-base mode, JSON and GitHub output, `--fail-on` as
+a flag, and the GitHub Action. Those parts of this README and of `docs/` describe planned
 behavior.
