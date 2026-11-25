@@ -64,6 +64,17 @@ def test_parse_ignores_other_comments_and_foreign_markers() -> None:
     assert allows.parse_inline(PATH, text, "sql") == ()
 
 
+def test_parse_strips_padding_around_the_reason() -> None:
+    text = '-- migrate-guard: allow MG004 reason="  audit_legacy retired  "\n'
+    [allow] = allows.parse_inline(PATH, text, "sql")
+    assert allow.reason == "audit_legacy retired"
+
+
+def test_parse_finds_nothing_for_an_unknown_format() -> None:
+    text = '-- migrate-guard: allow MG004 reason="x"\n# migrate-guard: allow MG004 reason="x"\n'
+    assert allows.parse_inline(PATH, text, "yaml") == ()
+
+
 @pytest.mark.parametrize(
     ("line", "message"),
     [
